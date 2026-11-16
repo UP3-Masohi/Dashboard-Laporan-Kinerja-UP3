@@ -111,11 +111,23 @@
     return out;
   }
   // Format lebar: baris header berisi tanggal; kolom B = unit, kolom C = Target/Realisasi
+  // Setelah kolom tanggal terakhir tiap bulan ada satu kolom ringkasan tanpa judul; pada baris
+  // Target isinya target bulanan unit tersebut (= TARGET KOMULATIF). Kolom itu dibaca sebagai `mt`.
   function wideGridToRows(grid) {
     var hdr = headerRow(grid), i, j;
     if (hdr < 0) return [];
-    var cols = [];
-    for (j = 0; j < grid[hdr].length; j++) { var d = cellDate(grid[hdr][j]); if (d) cols.push({ c: j, d: d }); }
+    var cols = [], monthCol = {};
+    for (j = 0; j < grid[hdr].length; j++) {
+      var d = cellDate(grid[hdr][j]);
+      if (d) {
+        cols.push({ c: j, d: d });
+        var next = j + 1 < grid[hdr].length ? cellDate(grid[hdr][j + 1]) : null;
+        if (!next || next.slice(0, 7) !== d.slice(0, 7)) { // tanggal terakhir bulan ini
+          var m = d.slice(0, 7);
+          if (!(m in monthCol) && j + 1 < grid[hdr].length && !next) monthCol[m] = j + 1;
+        }
+      }
+    }
     var byKey = {}, order = [], unit = '';
     for (i = hdr + 1; i < grid.length; i++) {
       var row = grid[i];
@@ -124,10 +136,13 @@
       if (!unit || (comp !== 'target' && comp !== 'realisasi')) continue;
       for (var k = 0; k < cols.length; k++) {
         var key = unit + '|' + cols[k].d;
-        if (!byKey[key]) { byKey[key] = { d: cols[k].d, u: unit, t: 0, r: 0, has: false }; order.push(key); }
+        if (!byKey[key]) { byKey[key] = { d: cols[k].d, u: unit, t: 0, r: 0, has: false, mt: null }; order.push(key); }
         var v = numOf(row[cols[k].c]);
-        if (comp === 'target') byKey[key].t = v || 0;
-        else { byKey[key].r = v === null ? 0 : v; byKey[key].has = v !== null; }
+        if (comp === 'target') {
+          byKey[key].t = v || 0;
+          var mc = monthCol[cols[k].d.slice(0, 7)];
+          if (mc !== undefined) { var mv = numOf(row[mc]); if (mv !== null) byKey[key].mt = mv; }
+        } else { byKey[key].r = v === null ? 0 : v; byKey[key].has = v !== null; }
       }
     }
     order.sort();
